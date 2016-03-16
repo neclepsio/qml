@@ -120,6 +120,15 @@ void engineSetOwnershipJS(QQmlEngine_ *engine, QObject_ *object)
     qengine->setObjectOwnership(qobject, QQmlEngine::JavaScriptOwnership);
 }
 
+void engineClearImportPaths(QQmlEngine_ *engine)
+{
+    QQmlEngine *qengine = reinterpret_cast<QQmlEngine *>(engine);
+
+    QStringList empty;
+
+    qengine->setImportPathList(empty);
+}
+
 void engineAddImportPath(QQmlEngine_ *engine, const char *path, int pathLen)
 {
     QQmlEngine *qengine = reinterpret_cast<QQmlEngine *>(engine);
@@ -130,10 +139,37 @@ void engineAddImportPath(QQmlEngine_ *engine, const char *path, int pathLen)
     qengine->addImportPath(qsimportPath);
 }
 
+void engineClearPluginPaths(QQmlEngine_ *engine)
+{
+    QQmlEngine *qengine = reinterpret_cast<QQmlEngine *>(engine);
+
+    QStringList empty;
+
+    qengine->setPluginPathList(empty);
+}
+
+void engineAddPluginPath(QQmlEngine_ *engine, const char *path, int pathLen)
+{
+    QQmlEngine *qengine = reinterpret_cast<QQmlEngine *>(engine);
+
+    QByteArray qpluginPath(path, pathLen);
+    QString qspluginPath = QString::fromUtf8(qpluginPath);
+
+    qengine->addPluginPath(qspluginPath);
+}
+
 void engineClearComponentCache(QQmlEngine_ *engine)
 {
     QQmlEngine *qengine = reinterpret_cast<QQmlEngine *>(engine);
     qengine->clearComponentCache();
+}
+
+void coreAddLibraryPath(const char *path, int pathLen)
+{
+    QByteArray qlibraryPath(path, pathLen);
+    QString qslibraryPath = QString::fromUtf8(qlibraryPath);
+
+    QCoreApplication::addLibraryPath(qslibraryPath);
 }
 
 QQmlComponent_ *newComponent(QQmlEngine_ *engine, QObject_ *parent)
