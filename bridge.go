@@ -23,12 +23,12 @@ import (
 )
 
 var (
-	guiFunc     = make(chan func())
-	guiDone     = make(chan struct{})
-	guiLock     = 0
-	guiMainRef  uintptr
-	guiPaintRef uintptr
-	guiIdleRun  int32
+	guiFunc      = make(chan func())
+	guiDone      = make(chan struct{})
+	guiLock      = 0
+	guiMainRef   uintptr
+	guiPaintRef  uintptr
+	guiIdleRun   int32
 
 	initialized int32
 )
@@ -187,7 +187,6 @@ func hookIdleTimer() {
 				return
 			}
 		}
-		// fmt.Fprintf(os.Stderr, "hookIdleTimer: %v\n", runtime.FuncForPC(reflect.ValueOf(f).Pointer()).Name())
 		f()
 		guiDone <- struct{}{}
 		atomic.AddInt32(&guiIdleRun, -1)
@@ -231,17 +230,10 @@ func wrapGoValue(engine *Engine, gvalue interface{}, owner valueOwner) (cvalue u
 
 	painting := cdata.Ref() == atomic.LoadUintptr(&guiPaintRef)
 
-	hashableGvalue := gvalue
-	if gvaluev.Kind() == reflect.Slice {
-		hashableGvalue = *(*reflect.SliceHeader)(unsafe.Pointer(gvaluev.Pointer()))
-	} else if !hashable(gvalue) {
-		panic(fmt.Sprintf("gvalue not hashable: %v %v", gvaluev.Type(), gvaluev.Kind()))
-	}
-
 	// Cannot reuse a jsOwner because the QML runtime may choose to destroy
 	// the value _after_ we hand it a new reference to the same value.
 	// See issue #68 for details.
-	prev, ok := engine.values[hashableGvalue]
+	prev, ok := engine.values[gvalue]
 	if ok && (prev.owner == cppOwner || painting) {
 		return prev.cvalue
 	}
@@ -265,7 +257,7 @@ func wrapGoValue(engine *Engine, gvalue interface{}, owner valueOwner) (cvalue u
 		fold.next = prev
 		prev.prev = fold
 	}
-	engine.values[hashableGvalue] = fold
+	engine.values[gvalue] = fold
 
 	//fmt.Printf("[DEBUG] value alive (wrapped): cvalue=%x gvalue=%x/%#v\n", fold.cvalue, addrOf(fold.gvalue), fold.gvalue)
 	stats.valuesAlive(+1)
@@ -364,6 +356,7 @@ func deref(value reflect.Value) reflect.Value {
 		}
 		return value
 	}
+	panic("cannot happen")
 }
 
 //export hookGoValueReadField
@@ -374,18 +367,7 @@ func hookGoValueReadField(enginep, foldp unsafe.Pointer, reflectIndex, getIndex,
 	if getIndex >= 0 {
 		field = reflect.ValueOf(fold.gvalue).Method(int(getIndex)).Call(nil)[0]
 	} else {
-		val := deref(reflect.ValueOf(fold.gvalue))
-		// defer func() {
-		// 	if r := recover(); r != nil {
-		// 		fmt.Fprintf(os.Stderr, "panic in hookGoValueReadField %v %v\n", val, reflectIndex)
-		// 	}
-		// }()
-		if !val.IsValid() {
-			// panic(fmt.Sprintf("invalid value in hookGoValueReadField %#v\n", fold))
-			resultdv.dataType = C.DTInvalid
-			return
-		}
-		field = val.Field(int(reflectIndex))
+		field = deref(reflect.ValueOf(fold.gvalue)).Field(int(reflectIndex))
 	}
 	field = deref(field)
 
@@ -521,11 +503,7 @@ func hookGoValueCallMethod(enginep, foldp unsafe.Pointer, reflectIndex C.int, ar
 	for i := 0; i < numIn; i++ {
 		paramdv := (*C.DataValue)(unsafe.Pointer(uintptr(unsafe.Pointer(args)) + (uintptr(i)+1)*dataValueSize))
 		param := reflect.ValueOf(unpackDataValue(paramdv, fold.engine))
-		argt := methodt.In(i)
-		if !param.IsValid() {
-			fmt.Printf("Warning: %s called with zero parameter\n", methodName)
-			param = reflect.Zero(argt)
-		} else if param.Type() != argt {
+		if argt := methodt.In(i); param.Type() != argt {
 			param, err = convertParam(methodName, i, param, argt)
 			if err != nil {
 				panic(err.Error())
@@ -584,7 +562,7 @@ func hookGoValuePaint(enginep, foldp unsafe.Pointer, reflectIndex C.intptr_t) {
 		return
 	}
 
-	painter := &Painter{engine: fold.engine, obj: CommonOf(fold.cvalue, fold.engine)}
+	painter := &Painter{engine: fold.engine, obj: &Common{fold.cvalue, fold.engine}}
 	v := reflect.ValueOf(fold.gvalue)
 	method := v.Method(int(reflectIndex))
 	method.Call([]reflect.Value{reflect.ValueOf(painter)})
@@ -639,7 +617,7 @@ func _initGoType(fold *valueFold, schedulePaint bool) {
 		return
 	}
 	// TODO Would be good to preserve identity on the Go side. See unpackDataValue as well.
-	obj := CommonOf(fold.cvalue, fold.engine)
+	obj := &Common{engine: fold.engine, addr: fold.cvalue}
 	fold.init.Call([]reflect.Value{reflect.ValueOf(fold.gvalue), reflect.ValueOf(obj)})
 	fold.init = reflect.Value{}
 	if schedulePaint {
