@@ -3,3 +3,6 @@ examples/snapweb/snapweb
 examples/particle/particle
 gl/gengl/gengl
 *.swp
+cpp/capi.h
+cpp/capi.h
+cpp/capi.h

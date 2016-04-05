@@ -130,6 +130,7 @@ void engineClearPluginPaths(QQmlEngine_ *engine);
 void engineAddPluginPath(QQmlEngine_ *engine, const char *path, int pathLen);
 void engineClearComponentCache(QQmlEngine_ *engine);
 void coreAddLibraryPath(const char *path, int pathLen);
+void engineAddImportPath(QQmlEngine_ *engine, QString_ *path);
 
 void contextGetProperty(QQmlContext_ *context, QString_ *name, DataValue *value);
 void contextSetProperty(QQmlContext_ *context, QString_ *name, DataValue *value);
