@@ -9,7 +9,7 @@ package webengine
 import "C"
 
 import (
-	"gopkg.in/qml.v1"
+	"github.com/HexxedUS/qml"
 )
 
 // Initializes the WebEngine extension.
